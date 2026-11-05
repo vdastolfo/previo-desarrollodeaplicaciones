@@ -78,12 +78,14 @@ function toEquipment(row: EquipmentRow): Equipment {
 
 export async function findEquipment(filter: string): Promise<Equipment[]> {
   const db = await openPlantDatabase();
-  const clause = filter.trim()
-    ? `WHERE name LIKE '%${filter.trim()}%' OR id LIKE '%${filter.trim()}%'`
-    : '';
-  const rows = await db.getAllAsync<EquipmentRow>(
-    `SELECT * FROM equipment ${clause} ORDER BY id ASC`
-  );
+  const term = filter.trim();
+  const rows = term
+    ? await db.getAllAsync<EquipmentRow>(
+        'SELECT * FROM equipment WHERE name LIKE ? OR id LIKE ? ORDER BY id ASC',
+        `%${term}%`,
+        `%${term}%`
+      )
+    : await db.getAllAsync<EquipmentRow>('SELECT * FROM equipment ORDER BY id ASC');
   return rows.map(toEquipment);
 }
 
@@ -105,19 +107,22 @@ export async function recordReading(
 ): Promise<void> {
   const db = await openPlantDatabase();
   const stamp = new Date().toISOString();
-  await db.runAsync(
-    'UPDATE equipment SET temperature = ?, updated_at = ? WHERE id = ?',
-    temperature,
-    stamp,
-    id
-  );
-  await db.runAsync(
-    'INSERT INTO readings (equipment_id, temperature, source, created_at) VALUES (?, ?, ?, ?)',
-    id,
-    temperature,
-    source,
-    stamp
-  );
+  // Ambas escrituras se confirman juntas o ninguna (ROLLBACK si una falla)
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'UPDATE equipment SET temperature = ?, updated_at = ? WHERE id = ?',
+      temperature,
+      stamp,
+      id
+    );
+    await db.runAsync(
+      'INSERT INTO readings (equipment_id, temperature, source, created_at) VALUES (?, ?, ?, ?)',
+      id,
+      temperature,
+      source,
+      stamp
+    );
+  });
 }
 
 function toReading(row: ReadingRow): Reading {
