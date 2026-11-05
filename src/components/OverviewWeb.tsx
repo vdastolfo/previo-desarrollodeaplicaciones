@@ -2,9 +2,15 @@ import React, { useMemo } from 'react';
 import { View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { Equipment } from '../domain/types';
+import { isInAlarm } from '../domain/alarm';
 
 function createHtml(items: Equipment[]): string {
-  const input = items.map(({ id, temperature, maxTemp }) => ({ id, temperature, maxTemp }));
+  const input = items.map((item) => ({
+  id: item.id,
+  temperature: item.temperature,
+  maxTemp: item.maxTemp,
+  alarm: isInAlarm(item),
+}));
   return `<!DOCTYPE html><html lang="es"><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
   <style>
   * { box-sizing:border-box; } body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:#15213B; color:#eaf3ff; }
@@ -27,7 +33,7 @@ function createHtml(items: Equipment[]): string {
     const line = document.createElement('div'); line.className='line';
     const code=document.createElement('span');code.className='code';code.textContent=row.id;
     const rail=document.createElement('div');rail.className='rail';
-    const fill=document.createElement('div');fill.className='fill'+(row.temperature>=row.maxTemp?' hot':'');
+    const fill=document.createElement('div');fill.className='fill'+(row.alarm?' hot':'');
     fill.style.width=Math.max(0,Math.min(100,(row.temperature/Math.max(1,row.maxTemp))*100))+'%';
     rail.appendChild(fill);
     const value=document.createElement('span');value.className='value';value.textContent=row.temperature.toFixed(1)+'°';

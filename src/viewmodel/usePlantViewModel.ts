@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Accelerometer } from 'expo-sensors';
 import type { Equipment, SyncMode } from '../domain/types';
-import { findEquipment, saveEquipmentState } from '../data/localDb';
+import { findEquipment, saveEquipmentState, saveMaxTemp } from '../data/localDb';
 import { simulateCycle, syncReference } from '../data/plantRepository';
+import { parseThreshold } from '../domain/alarm';
+
+export type ThresholdResult = { ok: true } | { ok: false; error: string };
 
 export function usePlantViewModel() {
   const [items, setItems] = useState<Equipment[]>([]);
@@ -77,6 +80,27 @@ export function usePlantViewModel() {
     }
   };
 
+  const changeMaxTemp = async (id: string, raw: string): Promise<ThresholdResult> => {
+  // 1. Validar: si no pasa, no se toca la base ni el estado
+  const parsed = parseThreshold(raw);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+
+  try {
+    // 2. Persistir primero
+    await saveMaxTemp(id, parsed.value);
+    // 3. Recién después actualizar el estado (nuevo array → re-render de tarjetas y WebView)
+    setItems((current) => current.map((item) =>
+      item.id === id ? { ...item, maxTemp: parsed.value } : item
+    ));
+    setNotice(`Límite de ${id} actualizado a ${parsed.value.toFixed(1)} °C.`);
+    return { ok: true };
+  } catch (error) {
+    const message = `No se pudo guardar el límite: ${String(error)}`;
+    setNotice(message);
+    return { ok: false, error: message };
+  }
+};
+
   const simulate = async () => {
     if (loading) return;
     setLoading(true);
@@ -118,6 +142,6 @@ export function usePlantViewModel() {
 
   return {
     items, filter, loading, notice, mode, humidity, vibration,
-    search, changeEnabled, simulate, sync,
+    search, changeEnabled, changeMaxTemp, simulate, sync,
   };
 }

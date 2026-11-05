@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,6 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { OverviewWeb } from '../components/OverviewWeb';
 import type { Equipment } from '../domain/types';
 import { usePlantViewModel } from '../viewmodel/usePlantViewModel';
+import { ThresholdDialog } from '../components/ThresholdDialog';
+import { isInAlarm } from '../domain/alarm';
 
 const C = {
   bg: '#F2F6FC', ink: '#14233E', muted: '#687990', navy: '#162D50',
@@ -25,11 +27,12 @@ function round(v: number): string {
   return `${v.toFixed(1)} °C`;
 }
 
-function EquipmentCard({ item, onToggle }: {
+function EquipmentCard({ item, onToggle, onEditThreshold }: {
   item: Equipment;
   onToggle: (id: string, enabled: boolean) => void;
+  onEditThreshold: (item: Equipment) => void;
 }) {
-  const alarm = item.enabled === 1 && item.temperature >= item.maxTemp;
+  const alarm = isInAlarm(item);
   return (
     <View style={styles.equipmentCard}>
       <View style={styles.cardTop}>
@@ -56,8 +59,9 @@ function EquipmentCard({ item, onToggle }: {
             {alarm ? '● ALARMA' : item.enabled ? '● OPERATIVO' : '○ DETENIDO'}
           </Text>
         </View>
-        <Pressable onPress={() => Alert.alert('Configuración', 'A implementar en el examen.')}
-          style={styles.inlineButton}><Text style={styles.inlineButtonText}>Umbral</Text></Pressable>
+        <Pressable onPress={() => onEditThreshold(item)} style={styles.inlineButton}>
+          <Text style={styles.inlineButtonText}>Umbral</Text>
+        </Pressable>
         <Pressable onPress={() => Alert.alert('Historial', 'A implementar en el examen.')}
           style={styles.inlineButton}><Text style={styles.inlineButtonText}>Historial</Text></Pressable>
       </View>
@@ -67,8 +71,9 @@ function EquipmentCard({ item, onToggle }: {
 
 export function PlantScreen() {
   const vm = usePlantViewModel();
-  const active = vm.items.filter((device) => device.enabled === 1).length;
-  const alarms = vm.items.filter((device) => device.enabled === 1 && device.temperature >= device.maxTemp).length;
+  const [editing, setEditing] = useState<Equipment | null>(null);
+const active = vm.items.filter((device) => device.enabled === 1).length;
+const alarms = vm.items.filter(isInAlarm).length;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -120,10 +125,11 @@ export function PlantScreen() {
           autoCapitalize="none"
           returnKeyType="search"
         />
-        {vm.items.map((item) => <EquipmentCard key={item.id} item={item} onToggle={(id, enabled) => void vm.changeEnabled(id, enabled)} />)}
+        {vm.items.map((item) => <EquipmentCard key={item.id} item={item} onToggle={(id, enabled) => void vm.changeEnabled(id, enabled)} onEditThreshold={setEditing} />)}
         {!vm.items.length && <Text style={styles.empty}>No se encontraron equipos.</Text>}
         <Text style={styles.footnote}>Entorno académico. Los equipos y comandos son simulados; la API externa aporta una referencia climática, no telemetría de una planta real.</Text>
       </ScrollView>
+      <ThresholdDialog equipment={editing} onCancel={() => setEditing(null)} onSave={vm.changeMaxTemp} />
     </SafeAreaView>
   );
 }
