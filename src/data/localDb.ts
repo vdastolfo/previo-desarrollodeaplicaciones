@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import type { Equipment } from '../domain/types';
+import type { Equipment, Reading } from '../domain/types';
 
 type EquipmentRow = {
   id: string;
@@ -9,6 +9,14 @@ type EquipmentRow = {
   temperature: number;
   max_temp: number;
   updated_at: string;
+};
+
+type ReadingRow = {
+  id: number;
+  equipment_id: string;
+  temperature: number;
+  source: string;
+  created_at: string;
 };
 
 let connection: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -110,4 +118,30 @@ export async function recordReading(
     source,
     stamp
   );
+}
+
+function toReading(row: ReadingRow): Reading {
+  return {
+    id: row.id,
+    equipmentId: row.equipment_id,
+    temperature: row.temperature,
+    source: row.source,
+    createdAt: row.created_at,
+  };
+}
+
+export const HISTORY_LIMIT = 10;
+
+export async function findReadings(equipmentId: string, limit = HISTORY_LIMIT): Promise<Reading[]> {
+  const db = await openPlantDatabase();
+  const rows = await db.getAllAsync<ReadingRow>(
+    `SELECT id, equipment_id, temperature, source, created_at
+       FROM readings
+      WHERE equipment_id = ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?`,
+    equipmentId,
+    limit
+  );
+  return rows.map(toReading);
 }
